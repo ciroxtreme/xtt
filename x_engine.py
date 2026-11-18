@@ -31,95 +31,104 @@ def send_telegram_photo(photo_path, caption=""):
 def login_and_search(query="Barca"):
     send_telegram(f"🐦 [X Runner] Memulai eksekusi X Engine untuk query: '{query}'...")
     
-    # Run Camoufox with direct IP (GitHub Actions runner datacenter IP is accepted by X web)
     with Camoufox(headless=True, i_know_what_im_doing=True) as browser:
         context = browser.new_context(viewport={"width": 1280, "height": 900})
         
         # Load existing cookies if any
+        has_session = False
         if os.path.exists(SESSION_FILE):
             try:
                 with open(SESSION_FILE, "r") as f:
                     cookies = json.load(f)
-                    context.add_cookies(cookies)
-                    print(f"Loaded {len(cookies)} cookies from {SESSION_FILE}")
+                    if cookies:
+                        context.add_cookies(cookies)
+                        print(f"Loaded {len(cookies)} cookies from {SESSION_FILE}")
+                        has_session = True
             except Exception as e:
                 print(f"Failed to load cookies: {e}")
 
         page = context.new_page()
         
-        # 1. Check if already logged in by opening home
-        print("Checking session status on x.com/home...")
-        try:
-            page.goto("https://x.com/home", timeout=45000, wait_until="domcontentloaded")
+        # 1. Pastikan status login
+        need_login = True
+        if has_session:
+            print("Checking session status on x.com/home...")
+            try:
+                page.goto("https://x.com/home", timeout=35000, wait_until="networkidle")
+                time.sleep(3)
+                if "/login" not in page.url and page.locator("a[data-testid='AppTabBar_Profile_Link']").count() > 0:
+                    need_login = False
+                    print("Verified: Already logged in with active profile!")
+            except Exception as e:
+                print(f"Session check error: {e}")
+
+        if need_login:
+            print("Starting login flow at https://x.com/i/flow/login...")
+            send_telegram("🔑 Membuka halaman login resmi X.com untuk akun Pulup302...")
+            page.goto("https://x.com/i/flow/login", timeout=45000, wait_until="networkidle")
             time.sleep(5)
-        except Exception as e:
-            print(f"Navigation warning: {e}")
-        
-        # Check if login required
-        if "/i/flow/login" in page.url or page.locator("text='Sign in to X'").count() > 0 or page.locator("a[href='/login']").count() > 0 or "login" in page.url:
-            print("Session not active or cookies expired. Starting login flow...")
-            send_telegram("🔑 Melakukan login otomatis akun Pulup302...")
-            page.goto("https://x.com/i/flow/login", timeout=45000, wait_until="domcontentloaded")
-            time.sleep(6)
             page.screenshot(path="login_step1.png")
+            send_telegram_photo("login_step1.png", "Halaman Login X.com Terbuka")
             
-            # Input Username
-            username_input = page.locator("input[autocomplete='username'], input[name='text']").first
-            if username_input.count() > 0:
-                print("Entering username...")
-                username_input.fill(X_USERNAME)
+            # Step 1: Input username
+            user_input = page.locator("input[autocomplete='username'], input[name='text']").first
+            if user_input.count() > 0:
+                print(f"Filling username {X_USERNAME}...")
+                user_input.fill(X_USERNAME)
                 time.sleep(1)
-                # Click next
-                next_btn = page.locator("button:has-text('Next'), role=button[name='Next']").first
+                next_btn = page.locator("button:has-text('Next')").first
                 if next_btn.count() > 0:
                     next_btn.click()
                 else:
                     page.keyboard.press("Enter")
-                time.sleep(4)
-                
-                # Check for unusual activity / email prompt
-                if page.locator("input[data-testid='ocfEnterTextTextInput']").count() > 0 or "phone or username" in page.content().lower():
-                    print("Twitter requested verification identifier...")
-                    page.locator("input[data-testid='ocfEnterTextTextInput']").first.fill(X_USERNAME)
-                    time.sleep(1)
-                    page.keyboard.press("Enter")
-                    time.sleep(4)
-                
-                # Input Password
-                password_input = page.locator("input[name='password'], input[type='password']").first
-                if password_input.count() > 0:
-                    print("Entering password...")
-                    password_input.fill(X_PASSWORD)
-                    time.sleep(1)
-                    login_btn = page.locator("button:has-text('Log in'), role=button[name='Log in']").first
-                    if login_btn.count() > 0:
-                        login_btn.click()
-                    else:
-                        page.keyboard.press("Enter")
-                    time.sleep(8)
-                else:
-                    print("Password field not found!")
-                    page.screenshot(path="no_password.png")
-                    send_telegram_photo("no_password.png", "⚠️ Kolom password tidak ditemukan")
+                time.sleep(5)
             else:
-                print("Username field not found!")
-                page.screenshot(path="no_username.png")
-                send_telegram_photo("no_username.png", "⚠️ Kolom username tidak ditemukan")
+                print("Username input selector not matched!")
             
-            # Save cookies after login
+            # Step 1.5: Phone or username verification
+            alt_input = page.locator("input[data-testid='ocfEnterTextTextInput'], input[name='text']").first
+            if alt_input.count() > 0 and page.locator("input[name='password']").count() == 0:
+                print("X asked for alternate identifier...")
+                alt_input.fill(X_USERNAME)
+                time.sleep(1)
+                page.keyboard.press("Enter")
+                time.sleep(5)
+
+            # Step 2: Input password
+            pwd_input = page.locator("input[name='password'], input[type='password']").first
+            if pwd_input.count() > 0:
+                print("Filling password...")
+                pwd_input.fill(X_PASSWORD)
+                time.sleep(1)
+                login_btn = page.locator("button:has-text('Log in'), button[data-testid='LoginForm_Login_Button']").first
+                if login_btn.count() > 0:
+                    login_btn.click()
+                else:
+                    page.keyboard.press("Enter")
+                time.sleep(8)
+            else:
+                print("Password input not found!")
+                page.screenshot(path="pwd_missing.png")
+                send_telegram_photo("pwd_missing.png", "Password field missing")
+
+            # Persist cookies
             cookies = context.cookies()
-            with open(SESSION_FILE, "w") as f:
-                json.dump(cookies, f, indent=2)
-            print(f"Saved {len(cookies)} cookies to {SESSION_FILE}")
-            page.screenshot(path="logged_in.png")
-            send_telegram_photo("logged_in.png", "✅ Status Login X.com")
-        else:
-            print("Already logged in with existing session!")
+            auth_token = next((c for c in cookies if c.get("name") == "auth_token"), None)
+            if auth_token:
+                print(f"SUCCESS! auth_token found: {auth_token['value'][:8]}...")
+                with open(SESSION_FILE, "w") as f:
+                    json.dump(cookies, f, indent=2)
+                page.screenshot(path="login_success.png")
+                send_telegram_photo("login_success.png", "🎉 Berhasil Login X.com!")
+            else:
+                print("Warning: auth_token cookie not found in session!")
+                page.screenshot(path="login_state.png")
+                send_telegram_photo("login_state.png", "Status akhir login")
 
         # 2. Execute Search with Latest filter (f=live)
         search_url = f"https://x.com/search?q={query}&f=live"
         print(f"Navigating to search URL: {search_url}")
-        page.goto(search_url, timeout=45000, wait_until="domcontentloaded")
+        page.goto(search_url, timeout=45000, wait_until="networkidle")
         time.sleep(6)
         
         # Take screenshot of live search results
@@ -147,9 +156,9 @@ def login_and_search(query="Barca"):
         if results:
             report = f"🔥 Postingan Terbaru di X untuk '{query}' (Live):\n\n" + "\n\n───────────────────\n\n".join(results)
             send_telegram(report)
-            send_telegram_photo("search_live.png", f"📸 Bukti Live Search X untuk: {query}")
+            send_telegram_photo("search_live.png", f"📸 Bukti Live Search X: {query}")
         else:
-            send_telegram(f"⚠️ Tidak ditemukan tweet untuk query '{query}', cek screenshot terlampir.")
+            send_telegram(f"⚠️ Tidak ada tweet yang ditarik, lihat tangkapan layar live search.")
             send_telegram_photo("search_live.png", f"Live Search Result: {query}")
 
 if __name__ == "__main__":
