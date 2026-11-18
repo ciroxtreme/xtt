@@ -84,8 +84,14 @@ def login_and_search(query="Barca"):
                 user_input.click()
                 user_input.fill(X_USERNAME)
                 time.sleep(1)
-                page.keyboard.press("Enter")
-                time.sleep(4)
+                
+                # Cari tombol Next secara spesifik
+                next_btn = page.locator("button:has-text('Next'), div[role='button']:has-text('Next')").first
+                if next_btn.count() > 0:
+                    next_btn.click()
+                else:
+                    page.keyboard.press("Enter")
+                time.sleep(5)
             else:
                 print("Username input selector not matched!")
             
@@ -96,7 +102,7 @@ def login_and_search(query="Barca"):
                     page.locator("input[data-testid='ocfEnterTextTextInput']").first.fill(X_USERNAME)
                     time.sleep(1)
                     page.keyboard.press("Enter")
-                    time.sleep(4)
+                    time.sleep(5)
             except Exception:
                 pass
 
@@ -112,8 +118,18 @@ def login_and_search(query="Barca"):
                 pwd_input.click()
                 pwd_input.fill(X_PASSWORD)
                 time.sleep(1)
-                page.keyboard.press("Enter")
-                time.sleep(8)
+                
+                # Klik tombol Log in secara fisik di DOM
+                login_btn = page.locator("button:has-text('Log in'), div[role='button']:has-text('Log in'), button[data-testid='LoginForm_Login_Button']").first
+                if login_btn.count() > 0:
+                    print("Clicking Log in button...")
+                    login_btn.click()
+                else:
+                    print("Pressing Enter for login...")
+                    page.keyboard.press("Enter")
+                
+                # Tunggu proses autentikasi X.com
+                time.sleep(12)
             else:
                 print("Password input not found!")
                 page.screenshot(path="pwd_missing.png")
