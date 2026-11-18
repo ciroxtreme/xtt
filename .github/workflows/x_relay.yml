@@ -1,0 +1,61 @@
+name: X (Twitter) Live Search Relay
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Kata kunci pencarian (misal: Barca, BTC, XAUUSD)"
+        required: true
+        default: "Barca"
+
+jobs:
+  run-x-relay:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache Camoufox Browser
+        id: camoufox-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/camoufox
+          key: ${{ runner.os }}-camoufox-browser-v1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          pip install "camoufox[geoip]" requests
+          camoufox fetch
+
+      - name: Run X Search Engine with Camoufox
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEBSHARE_ROTATING_PROXY: ${{ secrets.WEBSHARE_ROTATING_PROXY }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          xvfb-run -a python -u x_engine.py "${{ github.event.inputs.query }}"
+
+      - name: Commit Updated Session If Changed
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          git config user.name "Ciro Session Bot"
+          git config user.email "ciro@automated.local"
+          if [ -f session_x.json ]; then
+            git add session_x.json
+            if ! git diff --cached --quiet; then
+              git commit -m "Auto-persist session_x.json [skip ci]"
+              git push origin main
+            else
+              echo "No session changes to commit."
+            fi
+          fi
