@@ -21,16 +21,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Cache APT Packages & WARP Deb
         id: apt-cache
         uses: actions/cache@v4
         with:
           path: |
-            /var/cache/apt/archives
             /tmp/warp_pkg
-          key: ${{ runner.os }}-apt-warp-v1
+          key: ${{ runner.os }}-warp-deb-v1
 
       - name: Cache Camoufox Browser
         id: camoufox-cache
@@ -39,28 +37,27 @@ jobs:
           path: ~/.cache/camoufox
           key: ${{ runner.os }}-camoufox-browser-v1
 
-      - name: Cache Python Virtualenv / Pip
-        id: venv-cache
+      - name: Cache Pip Wheels
+        id: pip-cache
         uses: actions/cache@v4
         with:
-          path: ~/.local/lib/python3.11/site-packages
-          key: ${{ runner.os }}-pip-site-packages-v1
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-cache-v1
 
       - name: Fast Setup Dependencies & WARP
         run: |
-          # 1. Cek & Install Cloudflare WARP via cached .deb jika ada, jika tidak unduh sekali
           mkdir -p /tmp/warp_pkg
+          # 1. Unduh WARP deb hanya jika belum ada di cache
           if [ ! -f /tmp/warp_pkg/cloudflare-warp.deb ]; then
-            echo "Downloading Cloudflare WARP deb package to cache..."
+            echo "WARP deb not cached, downloading..."
             curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
             echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-            sudo apt-get update -o Dir::Cache::archives="/var/cache/apt/archives"
-            sudo apt-get install -d -y cloudflare-warp xvfb
-            # Simpan deb ke direktori cache permanen
+            sudo apt-get update
+            sudo apt-get install -d -y cloudflare-warp
             cp /var/cache/apt/archives/cloudflare-warp*.deb /tmp/warp_pkg/cloudflare-warp.deb 2>/dev/null || true
           fi
 
-          # Install xvfb & warp dari cache lokal (sangat cepat ~3 detik tanpa download ulang)
+          # 2. Pasang xvfb dan WARP deb dari cache lokal (cepat & offline)
           sudo apt-get install -y xvfb
           if [ -f /tmp/warp_pkg/cloudflare-warp.deb ]; then
             sudo dpkg -i /tmp/warp_pkg/cloudflare-warp.deb || sudo apt-get -f install -y
@@ -68,9 +65,8 @@ jobs:
             sudo apt-get install -y cloudflare-warp || true
           fi
 
-          # 2. Inisialisasi Cloudflare WARP Proxy
+          # 3. Inisialisasi Cloudflare WARP Proxy
           if command -v warp-cli >/dev/null 2>&1; then
-            echo "Initializing WARP in proxy mode..."
             warp-cli --accept-tos registration new || true
             warp-cli --accept-tos mode proxy || true
             warp-cli --accept-tos proxy port 40000 || true
@@ -79,8 +75,8 @@ jobs:
             warp-cli --accept-tos status || true
           fi
 
-          # 3. Pip dependencies (akan instan jika site-packages sudah di-cache)
-          pip install --user "camoufox[geoip]" requests
+          # 4. Install dependencies via pip cache
+          pip install "camoufox[geoip]" requests
           camoufox fetch
 
       - name: Run X Search Engine with Camoufox
