@@ -29,9 +29,26 @@ jobs:
           path: ~/.cache/camoufox
           key: ${{ runner.os }}-camoufox-browser-v1
 
-      - name: Install dependencies
+      - name: Setup Cloudflare WARP Proxy & Dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y xvfb
+          sudo apt-get update && sudo apt-get install -y xvfb curl gpg lsb-release
+          # Install Cloudflare WARP
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+          sudo apt-get update
+          sudo apt-get install -y cloudflare-warp || true
+          
+          # Inisialisasi WARP Client dalam mode SOCKS5/Proxy Lokal (Port 40000)
+          if command -v warp-cli >/dev/null 2>&1; then
+            echo "Registering and connecting Cloudflare WARP..."
+            warp-cli --accept-tos registration new || true
+            warp-cli --accept-tos mode proxy || true
+            warp-cli --accept-tos proxy port 40000 || true
+            warp-cli --accept-tos connect || true
+            sleep 3
+            warp-cli --accept-tos status || true
+          fi
+
           pip install "camoufox[geoip]" requests
           camoufox fetch
 
