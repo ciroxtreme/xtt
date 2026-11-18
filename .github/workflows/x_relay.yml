@@ -29,46 +29,10 @@ jobs:
           path: ~/.cache/camoufox
           key: ${{ runner.os }}-camoufox-browser-v1
 
-      - name: Setup Ultralight WARP & Dependencies
+      - name: Fast Setup Dependencies
         run: |
-          # 1. Pasang tools dasar & xvfb
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends xvfb libpcap0.8 curl gpg lsb-release
-
-          # 2. Ekstrak portable warp binaries dari .deb jika belum ada
-          if [ ! -f /usr/local/bin/warp-svc ]; then
-            echo "Extracting portable warp binaries..."
-            curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-            echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-            sudo apt-get update -y
-            mkdir -p /tmp/warp_extract
-            cd /tmp/warp_extract
-            apt-get download cloudflare-warp
-            dpkg-deb -x cloudflare-warp*.deb ./
-            sudo cp bin/warp-svc /usr/local/bin/
-            sudo cp bin/warp-cli /usr/local/bin/
-            sudo chmod +x /usr/local/bin/warp-svc /usr/local/bin/warp-cli
-            cd -
-            rm -rf /tmp/warp_extract
-          fi
-
-          # 3. Jalankan daemon warp-svc dengan direktori runtime Cloudflare resmi
-          echo "Starting warp-svc daemon with proper runtime dirs..."
-          sudo mkdir -p /var/lib/cloudflare-warp /run/cloudflare-warp
-          sudo chmod 777 /var/lib/cloudflare-warp /run/cloudflare-warp
-          sudo nohup /usr/local/bin/warp-svc > /tmp/warp_svc.log 2>&1 &
-          sleep 4
-
-          # 4. Inisialisasi WARP Proxy di Port 40000 dengan sudo agar socket IPC berizin
-          echo "Configuring warp-cli..."
-          sudo warp-cli --accept-tos registration new || true
-          sudo warp-cli --accept-tos mode proxy || true
-          sudo warp-cli --accept-tos proxy port 40000 || true
-          sudo warp-cli --accept-tos connect || true
-          sleep 3
-          sudo warp-cli --accept-tos status || true
-
-          # 5. Pip dependencies & Browser Camoufox
+          sudo apt-get install -y --no-install-recommends xvfb curl
           pip install "camoufox[geoip]" requests
           if [ ! -d ~/.cache/camoufox ] || [ -z "$(ls -A ~/.cache/camoufox 2>/dev/null)" ]; then
             camoufox fetch || true
@@ -78,7 +42,6 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WEBSHARE_ROTATING_PROXY: ${{ secrets.WEBSHARE_ROTATING_PROXY }}
           PYTHONUNBUFFERED: "1"
         run: |
           xvfb-run -a python -u x_engine.py "${{ github.event.inputs.query }}"
