@@ -1,3 +1,18 @@
+
+def get_browser_proxy():
+    # Cek apakah Cloudflare WARP SOCKS5 proxy aktif di port 40000
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(1)
+    try:
+        s.connect(("127.0.0.1", 40000))
+        s.close()
+        print("Detected Cloudflare WARP proxy on 127.0.0.1:40000")
+        return {"server": "socks5://127.0.0.1:40000"}
+    except Exception:
+        pass
+    return None
+
 import sys
 import os
 import json
@@ -64,7 +79,8 @@ def wait_for_telegram_reply(prompt_message, timeout_sec=180):
 def login_and_search(query="Barca"):
     send_telegram(f"🐦 [X Runner] Memulai eksekusi X Engine (Mode: Autentikasi Ketat)...")
     
-    with Camoufox(headless=True, i_know_what_im_doing=True) as browser:
+    proxy_cfg = get_browser_proxy()
+    with Camoufox(headless=True, i_know_what_im_doing=True, proxy=proxy_cfg) as browser:
         context = browser.new_context(viewport={"width": 1280, "height": 900})
         
         # Load existing cookies if any
