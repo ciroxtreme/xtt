@@ -31,12 +31,8 @@ def send_telegram_photo(photo_path, caption=""):
 def login_and_search(query="Barca"):
     send_telegram(f"🐦 [X Runner] Memulai eksekusi X Engine untuk query: '{query}'...")
     
-    # Setup Camoufox
-    # We can run stealth Camoufox without proxy or with rotating proxy
-    proxy_url = os.getenv("WEBSHARE_ROTATING_PROXY")
-    proxy_conf = {"server": proxy_url} if proxy_url else None
-    
-    with Camoufox(headless=True, proxy=proxy_conf) as browser:
+    # Run Camoufox with direct IP (GitHub Actions runner datacenter IP is accepted by X web)
+    with Camoufox(headless=True, i_know_what_im_doing=True) as browser:
         context = browser.new_context(viewport={"width": 1280, "height": 900})
         
         # Load existing cookies if any
@@ -53,14 +49,17 @@ def login_and_search(query="Barca"):
         
         # 1. Check if already logged in by opening home
         print("Checking session status on x.com/home...")
-        page.goto("https://x.com/home", timeout=45000)
-        time.sleep(5)
+        try:
+            page.goto("https://x.com/home", timeout=45000, wait_until="domcontentloaded")
+            time.sleep(5)
+        except Exception as e:
+            print(f"Navigation warning: {e}")
         
         # Check if login required
-        if "/i/flow/login" in page.url or page.locator("text='Sign in to X'").count() > 0 or page.locator("a[href='/login']").count() > 0:
+        if "/i/flow/login" in page.url or page.locator("text='Sign in to X'").count() > 0 or page.locator("a[href='/login']").count() > 0 or "login" in page.url:
             print("Session not active or cookies expired. Starting login flow...")
             send_telegram("🔑 Melakukan login otomatis akun Pulup302...")
-            page.goto("https://x.com/i/flow/login", timeout=45000)
+            page.goto("https://x.com/i/flow/login", timeout=45000, wait_until="domcontentloaded")
             time.sleep(6)
             page.screenshot(path="login_step1.png")
             
@@ -113,14 +112,14 @@ def login_and_search(query="Barca"):
                 json.dump(cookies, f, indent=2)
             print(f"Saved {len(cookies)} cookies to {SESSION_FILE}")
             page.screenshot(path="logged_in.png")
-            send_telegram_photo("logged_in.png", "✅ Login X.com Berhasil!")
+            send_telegram_photo("logged_in.png", "✅ Status Login X.com")
         else:
             print("Already logged in with existing session!")
 
         # 2. Execute Search with Latest filter (f=live)
         search_url = f"https://x.com/search?q={query}&f=live"
         print(f"Navigating to search URL: {search_url}")
-        page.goto(search_url, timeout=45000)
+        page.goto(search_url, timeout=45000, wait_until="domcontentloaded")
         time.sleep(6)
         
         # Take screenshot of live search results
