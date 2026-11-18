@@ -240,8 +240,18 @@ def login_and_search(query="Barca"):
         send_telegram(f"🔍 Sesi Login Aktif! Menjalankan pencarian Live untuk query: '{query}'...")
         search_url = f"https://x.com/search?q={query}&f=live"
         print(f"Navigating to search URL: {search_url}")
-        page.goto(search_url, timeout=45000, wait_until="domcontentloaded")
-        time.sleep(8)
+        page.goto(search_url, timeout=45000, wait_until="load")
+        
+        # Tunggu sampai selector tweet muncul atau timeout 15 detik
+        try:
+            page.wait_for_selector("article[data-testid='tweet']", timeout=15000)
+        except Exception:
+            pass
+        
+        # Scroll sedikit ke bawah untuk memicu lazy load react timeline
+        for _ in range(3):
+            page.mouse.wheel(0, 600)
+            time.sleep(1.5)
         
         # Take screenshot of live search results
         page.screenshot(path="search_live.png")
