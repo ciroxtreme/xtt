@@ -74,9 +74,6 @@ def login_and_search(query="Barca"):
             except Exception:
                 pass
             
-            page.screenshot(path="login_step1.png")
-            send_telegram_photo("login_step1.png", "Halaman Login X.com Terbuka")
-            
             # Step 1: Input username
             user_input = page.locator("input").first
             if user_input.count() > 0:
@@ -85,7 +82,6 @@ def login_and_search(query="Barca"):
                 user_input.fill(X_USERNAME)
                 time.sleep(1)
                 
-                # Cari tombol Next secara spesifik
                 next_btn = page.locator("button:has-text('Next'), div[role='button']:has-text('Next')").first
                 if next_btn.count() > 0:
                     next_btn.click()
@@ -119,21 +115,29 @@ def login_and_search(query="Barca"):
                 pwd_input.fill(X_PASSWORD)
                 time.sleep(1)
                 
-                # Klik tombol Log in secara fisik di DOM
-                login_btn = page.locator("button:has-text('Log in'), div[role='button']:has-text('Log in'), button[data-testid='LoginForm_Login_Button']").first
+                # Cek button login spesifik data-testid LoginForm_Login_Button
+                login_btn = page.locator("[data-testid='LoginForm_Login_Button']").first
                 if login_btn.count() > 0:
-                    print("Clicking Log in button...")
+                    print("Clicking data-testid LoginForm_Login_Button...")
                     login_btn.click()
                 else:
-                    print("Pressing Enter for login...")
-                    page.keyboard.press("Enter")
+                    # fallback to span / button with text Log in
+                    span_btn = page.locator("span:text-is('Log in')").first
+                    if span_btn.count() > 0:
+                        print("Clicking span text Log in...")
+                        span_btn.click()
+                    else:
+                        print("Pressing Enter for login...")
+                        page.keyboard.press("Enter")
                 
                 # Tunggu proses autentikasi X.com
-                time.sleep(12)
+                time.sleep(10)
             else:
                 print("Password input not found!")
-                page.screenshot(path="pwd_missing.png")
-                send_telegram_photo("pwd_missing.png", "Password field missing")
+
+            # Cek teks error atau status di layar
+            page_text = page.locator("body").inner_text()
+            print("Post-login page text preview:\n", page_text[:400])
 
             # Persist cookies
             cookies = context.cookies()
@@ -147,7 +151,7 @@ def login_and_search(query="Barca"):
             else:
                 print("Warning: auth_token cookie not found in session!")
                 page.screenshot(path="login_state.png")
-                send_telegram_photo("login_state.png", "Status akhir login")
+                send_telegram_photo("login_state.png", f"Status akhir login:\n{page_text[:150]}")
 
         # 2. Execute Search with Latest filter (f=live)
         search_url = f"https://x.com/search?q={query}&f=live"
