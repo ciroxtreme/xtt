@@ -264,36 +264,63 @@ def login_and_search(query="Barca"):
         except Exception:
             pass
         
-        # Scroll sedikit ke bawah untuk memicu lazy load react timeline
-        for _ in range(3):
-            page.mouse.wheel(0, 600)
-            time.sleep(1.5)
+        # Progressive scrolling untuk memuat minimal 30 tweet live
+        print("Progressively scrolling to load up to 30 live tweets...")
+        seen_tweets = set()
+        tweet_records = []
+        
+        for scroll_i in range(8):
+            elements = page.locator("article[data-testid='tweet']").all()
+            for el in elements:
+                try:
+                    text_content = el.locator("div[data-testid='tweetText']").first.inner_text().strip()
+                except Exception:
+                    text_content = ""
+                try:
+                    user_info = el.locator("div[data-testid='User-Name']").first.inner_text().replace("\n", " ")
+                except Exception:
+                    user_info = "Unknown User"
+                
+                # Gunakan user + cuplikan text sebagai unique key agar tidak duplikat saat scrolling
+                item_key = f"{user_info}_{text_content[:40]}"
+                if item_key not in seen_tweets:
+                    seen_tweets.add(item_key)
+                    tweet_records.append((user_info, text_content if text_content else "(Media/No text)"))
+            
+            if len(tweet_records) >= 30:
+                break
+                
+            page.mouse.wheel(0, 1000)
+            time.sleep(1.8)
+        
+        print(f"Total unique tweets collected: {len(tweet_records)}")
         
         # Take screenshot of live search results
         page.screenshot(path="search_live.png")
         
-        # Scrape tweets
-        tweet_elements = page.locator("article[data-testid='tweet']").all()
-        print(f"Found {len(tweet_elements)} tweets on page!")
-        
         results = []
-        for i, el in enumerate(tweet_elements[:7]):
-            try:
-                text_content = el.locator("div[data-testid='tweetText']").first.inner_text()
-            except Exception:
-                text_content = "(Media/No text)"
-            try:
-                user_info = el.locator("div[data-testid='User-Name']").first.inner_text().replace("\n", " ")
-            except Exception:
-                user_info = "Unknown User"
-            
-            tweet_text = f"👤 {user_info}\n💬 {text_content}"
-            results.append(tweet_text)
+        for user_info, text_content in tweet_records[:30]:
+            results.append(f"👤 {user_info}\n💬 {text_content}")
         
-        # Format report message
+        # Format report message (Auto-chunk jika mendekati batas 4096 karakter Telegram)
         if results:
-            report = f"🔥 Postingan Terbaru di X untuk '{query}' (Live):\n\n" + "\n\n───────────────────\n\n".join(results)
-            send_telegram(report)
+            header = f"🔥 Postingan Terbaru di X untuk '{query}' (Live - {len(results)} Tweet):\n\n"
+            current_chunk = header
+            chunk_num = 1
+            
+            for item in results:
+                entry = item + "\n\n───────────────────\n\n"
+                if len(current_chunk) + len(entry) > 3800:
+                    send_telegram(current_chunk.strip())
+                    time.sleep(0.6)
+                    chunk_num += 1
+                    current_chunk = f"🔥 Lanjutan {query} (Bagian {chunk_num}):\n\n" + entry
+                else:
+                    current_chunk += entry
+            
+            if current_chunk.strip():
+                send_telegram(current_chunk.strip())
+            
             send_telegram_photo("search_live.png", f"📸 Bukti Live Search X: {query}")
         else:
             send_telegram(f"⚠️ Tidak ada tweet yang ditarik untuk '{query}', lihat screenshot.")
