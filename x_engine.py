@@ -54,8 +54,8 @@ def login_and_search(query="Barca"):
         if has_session:
             print("Checking session status on x.com/home...")
             try:
-                page.goto("https://x.com/home", timeout=35000, wait_until="networkidle")
-                time.sleep(3)
+                page.goto("https://x.com/home", timeout=35000, wait_until="domcontentloaded")
+                time.sleep(4)
                 if "/login" not in page.url and page.locator("a[data-testid='AppTabBar_Profile_Link']").count() > 0:
                     need_login = False
                     print("Verified: Already logged in with active profile!")
@@ -65,46 +65,54 @@ def login_and_search(query="Barca"):
         if need_login:
             print("Starting login flow at https://x.com/i/flow/login...")
             send_telegram("🔑 Membuka halaman login resmi X.com untuk akun Pulup302...")
-            page.goto("https://x.com/i/flow/login", timeout=45000, wait_until="networkidle")
-            time.sleep(5)
+            page.goto("https://x.com/i/flow/login", timeout=45000, wait_until="domcontentloaded")
+            time.sleep(6)
+            
+            # Tunggu elemen input muncul
+            try:
+                page.wait_for_selector("input", timeout=15000)
+            except Exception:
+                pass
+            
             page.screenshot(path="login_step1.png")
             send_telegram_photo("login_step1.png", "Halaman Login X.com Terbuka")
             
             # Step 1: Input username
-            user_input = page.locator("input[autocomplete='username'], input[name='text']").first
+            user_input = page.locator("input").first
             if user_input.count() > 0:
                 print(f"Filling username {X_USERNAME}...")
+                user_input.click()
                 user_input.fill(X_USERNAME)
                 time.sleep(1)
-                next_btn = page.locator("button:has-text('Next')").first
-                if next_btn.count() > 0:
-                    next_btn.click()
-                else:
-                    page.keyboard.press("Enter")
-                time.sleep(5)
+                page.keyboard.press("Enter")
+                time.sleep(4)
             else:
                 print("Username input selector not matched!")
             
-            # Step 1.5: Phone or username verification
-            alt_input = page.locator("input[data-testid='ocfEnterTextTextInput'], input[name='text']").first
-            if alt_input.count() > 0 and page.locator("input[name='password']").count() == 0:
-                print("X asked for alternate identifier...")
-                alt_input.fill(X_USERNAME)
-                time.sleep(1)
-                page.keyboard.press("Enter")
-                time.sleep(5)
+            # Step 1.5: Phone or username verification jika diminta
+            try:
+                if page.locator("input[data-testid='ocfEnterTextTextInput']").count() > 0:
+                    print("X asked for alternate identifier...")
+                    page.locator("input[data-testid='ocfEnterTextTextInput']").first.fill(X_USERNAME)
+                    time.sleep(1)
+                    page.keyboard.press("Enter")
+                    time.sleep(4)
+            except Exception:
+                pass
 
             # Step 2: Input password
+            try:
+                page.wait_for_selector("input[name='password'], input[type='password']", timeout=10000)
+            except Exception:
+                pass
+            
             pwd_input = page.locator("input[name='password'], input[type='password']").first
             if pwd_input.count() > 0:
                 print("Filling password...")
+                pwd_input.click()
                 pwd_input.fill(X_PASSWORD)
                 time.sleep(1)
-                login_btn = page.locator("button:has-text('Log in'), button[data-testid='LoginForm_Login_Button']").first
-                if login_btn.count() > 0:
-                    login_btn.click()
-                else:
-                    page.keyboard.press("Enter")
+                page.keyboard.press("Enter")
                 time.sleep(8)
             else:
                 print("Password input not found!")
@@ -128,8 +136,8 @@ def login_and_search(query="Barca"):
         # 2. Execute Search with Latest filter (f=live)
         search_url = f"https://x.com/search?q={query}&f=live"
         print(f"Navigating to search URL: {search_url}")
-        page.goto(search_url, timeout=45000, wait_until="networkidle")
-        time.sleep(6)
+        page.goto(search_url, timeout=45000, wait_until="domcontentloaded")
+        time.sleep(8)
         
         # Take screenshot of live search results
         page.screenshot(path="search_live.png")
