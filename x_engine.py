@@ -28,11 +28,10 @@ def send_telegram_photo(photo_path, caption=""):
     except Exception as e:
         print(f"[ERR] Failed to send photo: {e}")
 
-def wait_for_telegram_reply(prompt_message, timeout_sec=120):
+def wait_for_telegram_reply(prompt_message, timeout_sec=180):
     """Kirim pesan minta input kode/2FA ke Telegram dan tunggu balasan Tuan Ciro"""
-    send_telegram(f"⏳ {prompt_message}\n\n👉 Kirim balasannya (kode angka/email) ke chat ini dalam {timeout_sec} detik.")
+    send_telegram(f"⏳ {prompt_message}\n\n👉 Kirim balasannya (kode angka/email) ke chat bot ini dalam {timeout_sec} detik.")
     
-    # Dapatkan ID update terakhir
     url_updates = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     last_update_id = 0
     try:
@@ -54,12 +53,12 @@ def wait_for_telegram_reply(prompt_message, timeout_sec=120):
                 chat_id = str(msg.get("chat", {}).get("id"))
                 text = msg.get("text", "").strip()
                 if chat_id == str(TELEGRAM_CHAT_ID) and text:
-                    send_telegram(f"✅ Menerima input: '{text}', melanjutkan login...")
+                    send_telegram(f"✅ Menerima kode: '{text}', menyuntikkan ke browser...")
                     return text
         except Exception as e:
             print(f"Error polling telegram: {e}")
             
-    send_telegram("❌ Waktu habis (timeout) menunggu balasan dari Telegram.")
+    send_telegram("❌ Waktu habis (timeout) menunggu kode verifikasi dari Telegram.")
     return None
 
 def login_and_search(query="Barca"):
@@ -170,30 +169,36 @@ def login_and_search(query="Barca"):
 
             # Step 3: Loop pemeriksaan tantangan / 2FA / verifikasi kode setelah password
             auth_token_found = False
-            for attempt in range(6):
+            for attempt in range(8):
                 cookies = context.cookies()
                 auth_cookie = next((c for c in cookies if c.get("name") == "auth_token"), None)
                 if auth_cookie:
                     auth_token_found = True
                     break
 
-                # Cek teks layar apakah ada permintaan 2FA / Email code / Arkose Captcha
                 body_text = page.locator("body").inner_text()
                 print(f"[Check {attempt}] Body text preview:\n", body_text[:200])
                 
                 # Kasus A: Butuh Kode Verifikasi Email atau SMS atau TOTP
-                if any(k in body_text.lower() for k in ["confirmation code", "verification code", "check your email", "two-factor", "authentication code", "enter code"]):
+                # Deteksi "security code", "confirmation code", "verification code", "check your email"
+                if any(k in body_text.lower() for k in ["security code", "confirmation code", "verification code", "check your email", "two-factor", "authentication code", "enter code"]):
                     page.screenshot(path="need_code.png")
-                    send_telegram_photo("need_code.png", "⚠️ X meminta Kode Verifikasi / 2FA!")
+                    send_telegram_photo("need_code.png", "⚠️ X mengirim Kode Keamanan (Security Code) ke Email!")
                     
-                    code = wait_for_telegram_reply("X.com meminta kode verifikasi / 2FA.", timeout_sec=120)
+                    code = wait_for_telegram_reply("X.com meminta Security Code dari email p***2@g***.com.", timeout_sec=180)
                     if code:
-                        code_input = page.locator("input[data-testid='ocfEnterTextTextInput'], input[type='text'], input[name='text']").first
+                        code_input = page.locator("input[data-testid='ocfEnterTextTextInput'], input[type='text'], input[name='text'], input").first
                         if code_input.count() > 0:
+                            code_input.click()
                             code_input.fill(code)
                             time.sleep(1)
-                            page.keyboard.press("Enter")
-                            time.sleep(8)
+                            # Klik Next atau Continue
+                            cont_btn = page.locator("button:has-text('Next'), button:has-text('Continue'), div[role='button']:has-text('Next'), div[role='button']:has-text('Continue')").first
+                            if cont_btn.count() > 0:
+                                cont_btn.click()
+                            else:
+                                page.keyboard.press("Enter")
+                            time.sleep(10)
                     else:
                         send_telegram("❌ Login dibatalkan karena tidak ada kode yang dimasukkan.")
                         sys.exit(1)
@@ -221,7 +226,7 @@ def login_and_search(query="Barca"):
             with open(SESSION_FILE, "w") as f:
                 json.dump(cookies, f, indent=2)
             page.screenshot(path="login_success.png")
-            send_telegram_photo("login_success.png", "🎉 Berhasil Login X.com! Sesi tersimpan aman.")
+            send_telegram_photo("login_success.png", "🎉 Berhasil Login X.com! Sesi tersimpan permanen.")
 
         # 2. HANYA JALAN JIKA LOGIN SUDAH 100% SUKSES:
         send_telegram(f"🔍 Sesi Login Aktif! Menjalankan pencarian Live untuk query: '{query}'...")
