@@ -42,6 +42,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEBSHARE_ROTATING_PROXY: ${{ secrets.WEBSHARE_ROTATING_PROXY }}
           PYTHONUNBUFFERED: "1"
         run: |
           xvfb-run -a python -u x_engine.py "${{ github.event.inputs.query }}"

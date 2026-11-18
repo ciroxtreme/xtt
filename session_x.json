@@ -1,25 +1,5 @@
 [
   {
-    "name": "cf_clearance",
-    "value": "Ci_-BGj-Eycn5aSt6b3SzCdjEe7Qh8r8MS00JmdSZAl7gEsVrc0REI0jIvqWRxVDXx_JejGFN-6uO37GxgOoyng6K-som1g3A_DhGmMPzfw55D2F9O3CndoVJ2H4j8lN5fsBnkjNWDK38DXn_v2C0PcHuOXVZSNcgKvxITprcji7-n-UJLZGFRpzi1heVt0rsk5tdJ7e2C6-hlUpfYhVzbHeSwW6bjSlbw0-cjhHd0CZbxlsCYMqIxqzlnYgO0C5gCcEZFPas1l6RsElG5yZCOHQJMTbNQj6DnQ_dmN9GdSSshVOQ75CzuNegYOIyrBYONf_1Cfx9S-J",
-    "domain": ".x.com",
-    "path": "/",
-    "expires": 1826539793.887,
-    "httpOnly": true,
-    "secure": true,
-    "sameSite": "None"
-  },
-  {
-    "name": "__cf_bm",
-    "value": "QEyWYQ5LV26MMBv_sGXM1hc7swhgK.GZDJ5h4PiOZFU-1795003793.872087-1.0.1.1-Ngoc5diWnUPT6a5r5KZ3mWYNSL58S7LfaXEd2y0dfSgfLPrVkYAgwz4vE_JczFrb2Mpgh0tL5pguwZ4w.XSnxQz1X9t4JLbUzYlv4Wz6mcfPX.o5KnMN8QsJNgF2.QYm",
-    "domain": ".x.com",
-    "path": "/",
-    "expires": 1795005593.888,
-    "httpOnly": true,
-    "secure": true,
-    "sameSite": "None"
-  },
-  {
     "name": "guest_id_marketing",
     "value": "v1%3A179498919956431739",
     "domain": ".twitter.com",
@@ -56,16 +36,6 @@
     "path": "/",
     "expires": 1829549199.576,
     "httpOnly": false,
-    "secure": true,
-    "sameSite": "None"
-  },
-  {
-    "name": "cf_clearance",
-    "value": "Chs-ZqUGc9SP14oLO3uK7-YHWw1tsJjLUKZ2O9BP7HYEAsEUzFIwcFCXb2FbDj9-VyS5wFjZGqEqGRsvVf69AurAwwjcK2rBtRa4llVJ_Vw_q20ocHHKtdrDRBxcb1PHmSQR78vOXMa9A4y5IFbV6Q75Lewp9rnklwR4vVctgBQyjtFix2CB1o0Aj5VnJCw3PpYS3KJQfIS59NaiGqzDZf-L9cWp6NlgIZGC9xVOCbEz0ANVh4w_km6Bp7zxo9KgI1keG2Ah6-ylyH6ryuzbsgPwgCv9ogtC8gUHcP15ubt4gMcTrmlBBed4g7CL_MUE2v7l5CLcmw",
-    "domain": ".x.com",
-    "path": "/",
-    "expires": 1826525027.524,
-    "httpOnly": true,
     "secure": true,
     "sameSite": "None"
   },
@@ -196,16 +166,6 @@
     "path": "/",
     "expires": 1829563796.915,
     "httpOnly": false,
-    "secure": true,
-    "sameSite": "None"
-  },
-  {
-    "name": "__cf_bm",
-    "value": "H19T2CbuxIQAXKUaeMwgzaQGLz4bkDc9G2LnYhBzGkU-1795003796.8685162-1.0.1.1-.iAqU4M401Ej8BMqh1NEmUcma6llhbdYVREJhs_IdPDwd3umCDp2HGjG6i7OhFIcb5EMOVGZGK4bLbmb0V4bkCaahy7F1Mg6pcd0BlK5wDw77.CNSwgxKEDew2ubCUKL",
-    "domain": ".twitter.com",
-    "path": "/",
-    "expires": 1795005596.915,
-    "httpOnly": true,
     "secure": true,
     "sameSite": "None"
   }
