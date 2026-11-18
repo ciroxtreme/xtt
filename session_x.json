@@ -1,0 +1,92 @@
+[
+  {
+    "name": "__cf_bm",
+    "value": "d9AqTBz2HYrWQRt3cUGouRupzpm_QHznjO1wuT_9KxI-1794985564.6460946-1.0.1.1-.Lj6rOtT.iruXJ4tTuVTXBKxquBTPFPB8EvHjVwVwNrwFkz0KrzK7zx87a7ofn0qNNIhtCSUa0v0w8YUC1OA5Rz5J0tI.rw.lHCWILoLRAbedygz3RoPiFhH_PfniW0v",
+    "domain": ".x.com",
+    "path": "/",
+    "expires": 1794987364.678,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "gt",
+    "value": "2122949250283712737",
+    "domain": ".x.com",
+    "path": "/",
+    "expires": 1794994518.473,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "guest_id",
+    "value": "v1%3A179498551840399962",
+    "domain": ".x.com",
+    "path": "/",
+    "expires": 1829199918.473,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "__cuid",
+    "value": "1badbcde-8662-43ea-b2b0-0b6602a962c4",
+    "domain": "x.com",
+    "path": "/",
+    "expires": 1829545519,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "__cuid",
+    "value": "1badbcde-8662-43ea-b2b0-0b6602a962c4",
+    "domain": ".x.com",
+    "path": "/",
+    "expires": 1829545519,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "g_state",
+    "value": "{\"i_l\":1,\"i_ll\":1794985520201,\"i_b\":\"e7eCaB/lIlvIYzW/lADcJSKq34Qo8FHBmdj2E+WInO8\",\"i_e\":{\"enable_itp_optimization\":24},\"i_et\":1794985520201}",
+    "domain": "x.com",
+    "path": "/",
+    "expires": 1810537520,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "twid",
+    "value": "u%3D2122863593536573440",
+    "domain": ".x.com",
+    "path": "/",
+    "expires": 1826521564.278,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "auth_token",
+    "value": "8c775e38a1beede91f5cbde644e795e81b7ea15a",
+    "domain": ".x.com",
+    "path": "/",
+    "expires": 1826521564.278,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "ct0",
+    "value": "e373766e8b89dafffcda37c3c13afcc52eea1991037db5fc9b8ecd5cbe82ecedc19bdce708e60aba42a673d480530aab1880d71f3ef086088591f6f992418879909e2d2fa72efe2e7895f2561f6a89bd",
+    "domain": ".x.com",
+    "path": "/",
+    "expires": 1829199964.612,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  }
+]
