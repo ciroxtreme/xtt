@@ -48,25 +48,27 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           mkdir -p /tmp/warp_pkg
-          # 1. Pasang WARP dari cache lokal jika ada, jika belum unduh sekali
+          # 1. Update mirror & install xvfb dengan --fix-missing
+          sudo apt-get update -y || true
+          sudo apt-get install -y --fix-missing xvfb curl gpg lsb-release
+
+          # 2. Pasang WARP dari cache lokal jika ada, jika belum unduh sekali
           if [ ! -f /tmp/warp_pkg/cloudflare-warp.deb ]; then
             echo "WARP deb not in cache, fetching..."
             curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
             echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-            sudo apt-get update
-            sudo apt-get install -d -y cloudflare-warp
+            sudo apt-get update -y || true
+            sudo apt-get install -d -y cloudflare-warp || true
             cp /var/cache/apt/archives/cloudflare-warp*.deb /tmp/warp_pkg/cloudflare-warp.deb 2>/dev/null || true
           fi
 
-          # Install xvfb dan WARP deb instan
-          sudo apt-get install -y xvfb
           if [ -f /tmp/warp_pkg/cloudflare-warp.deb ]; then
             sudo dpkg -i /tmp/warp_pkg/cloudflare-warp.deb || sudo apt-get -f install -y
           else
             sudo apt-get install -y cloudflare-warp || true
           fi
 
-          # 2. Inisialisasi Cloudflare WARP Proxy
+          # 3. Inisialisasi Cloudflare WARP Proxy
           if command -v warp-cli >/dev/null 2>&1; then
             warp-cli --accept-tos registration new || true
             warp-cli --accept-tos mode proxy || true
@@ -76,10 +78,10 @@ jobs:
             warp-cli --accept-tos status || true
           fi
 
-          # 3. Pip dependencies (akan instan dari cache wheel)
+          # 4. Pip dependencies (akan instan dari cache wheel)
           pip install "camoufox[geoip]" requests
 
-          # 4. Camoufox fetch hanya jika browser belum ada di cache
+          # 5. Camoufox fetch hanya jika browser belum ada di cache
           if [ ! -d ~/.cache/camoufox ] || [ -z "$(ls -A ~/.cache/camoufox 2>/dev/null)" ]; then
             echo "Camoufox cache empty, fetching browser using GITHUB_TOKEN auth..."
             camoufox fetch || true
