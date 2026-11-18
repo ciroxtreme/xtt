@@ -146,19 +146,21 @@ def login_and_search(query="Barca"):
             pwd_input = page.locator("input[name='password'], input[type='password']").first
             if pwd_input.count() > 0:
                 print("Filling password...")
-                pwd_input.click()
+                try:
+                    pwd_input.click(force=True, timeout=5000)
+                except Exception:
+                    pass
                 pwd_input.fill(X_PASSWORD)
                 time.sleep(1)
                 
-                login_btn = page.locator("[data-testid='LoginForm_Login_Button']").first
+                login_btn = page.locator("[data-testid='LoginForm_Login_Button'], button:has-text('Log in'), div[role='button']:has-text('Log in')").first
                 if login_btn.count() > 0:
-                    login_btn.click()
-                else:
-                    span_btn = page.locator("span:text-is('Log in')").first
-                    if span_btn.count() > 0:
-                        span_btn.click()
-                    else:
+                    try:
+                        login_btn.click(force=True)
+                    except Exception:
                         page.keyboard.press("Enter")
+                else:
+                    page.keyboard.press("Enter")
                 
                 time.sleep(8)
             else:
@@ -189,13 +191,19 @@ def login_and_search(query="Barca"):
                     if code:
                         code_input = page.locator("input[data-testid='ocfEnterTextTextInput'], input[type='text'], input[name='text'], input").first
                         if code_input.count() > 0:
-                            code_input.click()
+                            try:
+                                code_input.click(force=True, timeout=5000)
+                            except Exception:
+                                pass
                             code_input.fill(code)
                             time.sleep(1)
                             # Klik Next atau Continue
                             cont_btn = page.locator("button:has-text('Next'), button:has-text('Continue'), div[role='button']:has-text('Next'), div[role='button']:has-text('Continue')").first
                             if cont_btn.count() > 0:
-                                cont_btn.click()
+                                try:
+                                    cont_btn.click(force=True)
+                                except Exception:
+                                    page.keyboard.press("Enter")
                             else:
                                 page.keyboard.press("Enter")
                             time.sleep(10)
