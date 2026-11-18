@@ -28,8 +28,42 @@ def send_telegram_photo(photo_path, caption=""):
     except Exception as e:
         print(f"[ERR] Failed to send photo: {e}")
 
+def wait_for_telegram_reply(prompt_message, timeout_sec=120):
+    """Kirim pesan minta input kode/2FA ke Telegram dan tunggu balasan Tuan Ciro"""
+    send_telegram(f"⏳ {prompt_message}\n\n👉 Kirim balasannya (kode angka/email) ke chat ini dalam {timeout_sec} detik.")
+    
+    # Dapatkan ID update terakhir
+    url_updates = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+    last_update_id = 0
+    try:
+        r = requests.get(url_updates, params={"offset": -1}, timeout=10).json()
+        if r.get("result"):
+            last_update_id = r["result"][-1]["update_id"]
+    except Exception:
+        pass
+    
+    start_time = time.time()
+    while time.time() - start_time < timeout_sec:
+        time.sleep(3)
+        try:
+            r = requests.get(url_updates, params={"offset": last_update_id + 1, "timeout": 5}, timeout=10).json()
+            results = r.get("result", [])
+            for res in results:
+                last_update_id = res["update_id"]
+                msg = res.get("message", {})
+                chat_id = str(msg.get("chat", {}).get("id"))
+                text = msg.get("text", "").strip()
+                if chat_id == str(TELEGRAM_CHAT_ID) and text:
+                    send_telegram(f"✅ Menerima input: '{text}', melanjutkan login...")
+                    return text
+        except Exception as e:
+            print(f"Error polling telegram: {e}")
+            
+    send_telegram("❌ Waktu habis (timeout) menunggu balasan dari Telegram.")
+    return None
+
 def login_and_search(query="Barca"):
-    send_telegram(f"🐦 [X Runner] Memulai eksekusi X Engine untuk query: '{query}'...")
+    send_telegram(f"🐦 [X Runner] Memulai eksekusi X Engine (Mode: Autentikasi Ketat)...")
     
     with Camoufox(headless=True, i_know_what_im_doing=True) as browser:
         context = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -68,7 +102,6 @@ def login_and_search(query="Barca"):
             page.goto("https://x.com/i/flow/login", timeout=45000, wait_until="domcontentloaded")
             time.sleep(6)
             
-            # Tunggu elemen input muncul
             try:
                 page.wait_for_selector("input", timeout=15000)
             except Exception:
@@ -89,9 +122,12 @@ def login_and_search(query="Barca"):
                     page.keyboard.press("Enter")
                 time.sleep(5)
             else:
-                print("Username input selector not matched!")
+                send_telegram("❌ Gagal menemukan kolom input username!")
+                page.screenshot(path="no_user_input.png")
+                send_telegram_photo("no_user_input.png", "Kolom input username tidak ada")
+                sys.exit(1)
             
-            # Step 1.5: Phone or username verification jika diminta
+            # Step 1.5: Phone or alternate username verification jika diminta
             try:
                 if page.locator("input[data-testid='ocfEnterTextTextInput']").count() > 0:
                     print("X asked for alternate identifier...")
@@ -115,45 +151,80 @@ def login_and_search(query="Barca"):
                 pwd_input.fill(X_PASSWORD)
                 time.sleep(1)
                 
-                # Cek button login spesifik data-testid LoginForm_Login_Button
                 login_btn = page.locator("[data-testid='LoginForm_Login_Button']").first
                 if login_btn.count() > 0:
-                    print("Clicking data-testid LoginForm_Login_Button...")
                     login_btn.click()
                 else:
-                    # fallback to span / button with text Log in
                     span_btn = page.locator("span:text-is('Log in')").first
                     if span_btn.count() > 0:
-                        print("Clicking span text Log in...")
                         span_btn.click()
                     else:
-                        print("Pressing Enter for login...")
                         page.keyboard.press("Enter")
                 
-                # Tunggu proses autentikasi X.com
-                time.sleep(10)
+                time.sleep(8)
             else:
-                print("Password input not found!")
+                send_telegram("❌ Gagal menemukan kolom input password!")
+                page.screenshot(path="pwd_missing.png")
+                send_telegram_photo("pwd_missing.png", "Password field missing")
+                sys.exit(1)
 
-            # Cek teks error atau status di layar
-            page_text = page.locator("body").inner_text()
-            print("Post-login page text preview:\n", page_text[:400])
+            # Step 3: Loop pemeriksaan tantangan / 2FA / verifikasi kode setelah password
+            auth_token_found = False
+            for attempt in range(6):
+                cookies = context.cookies()
+                auth_cookie = next((c for c in cookies if c.get("name") == "auth_token"), None)
+                if auth_cookie:
+                    auth_token_found = True
+                    break
 
-            # Persist cookies
+                # Cek teks layar apakah ada permintaan 2FA / Email code / Arkose Captcha
+                body_text = page.locator("body").inner_text()
+                print(f"[Check {attempt}] Body text preview:\n", body_text[:200])
+                
+                # Kasus A: Butuh Kode Verifikasi Email atau SMS atau TOTP
+                if any(k in body_text.lower() for k in ["confirmation code", "verification code", "check your email", "two-factor", "authentication code", "enter code"]):
+                    page.screenshot(path="need_code.png")
+                    send_telegram_photo("need_code.png", "⚠️ X meminta Kode Verifikasi / 2FA!")
+                    
+                    code = wait_for_telegram_reply("X.com meminta kode verifikasi / 2FA.", timeout_sec=120)
+                    if code:
+                        code_input = page.locator("input[data-testid='ocfEnterTextTextInput'], input[type='text'], input[name='text']").first
+                        if code_input.count() > 0:
+                            code_input.fill(code)
+                            time.sleep(1)
+                            page.keyboard.press("Enter")
+                            time.sleep(8)
+                    else:
+                        send_telegram("❌ Login dibatalkan karena tidak ada kode yang dimasukkan.")
+                        sys.exit(1)
+
+                # Kasus B: Arkose Labs Captcha
+                elif "arkose" in page.content().lower() or "challenge" in page.url:
+                    page.screenshot(path="captcha.png")
+                    send_telegram_photo("captcha.png", "⚠️ Terkena Captcha tantangan visual X.com")
+                    send_telegram("Terdeteksi Captcha bot X.com, mencoba menunggu...")
+                    time.sleep(10)
+                else:
+                    time.sleep(4)
+
+            # Validasi Mutlak: Sesi login wajib sudah jadi sebelum lanjut
             cookies = context.cookies()
             auth_token = next((c for c in cookies if c.get("name") == "auth_token"), None)
-            if auth_token:
-                print(f"SUCCESS! auth_token found: {auth_token['value'][:8]}...")
-                with open(SESSION_FILE, "w") as f:
-                    json.dump(cookies, f, indent=2)
-                page.screenshot(path="login_success.png")
-                send_telegram_photo("login_success.png", "🎉 Berhasil Login X.com!")
-            else:
-                print("Warning: auth_token cookie not found in session!")
-                page.screenshot(path="login_state.png")
-                send_telegram_photo("login_state.png", f"Status akhir login:\n{page_text[:150]}")
+            if not auth_token:
+                page_text = page.locator("body").inner_text()
+                page.screenshot(path="login_failed.png")
+                send_telegram_photo("login_failed.png", f"❌ Login Gagal! Sesi auth_token belum terbentuk.\n\nDetail:\n{page_text[:180]}")
+                send_telegram("🛑 Proses dihentikan sesuai instruksi: tidak akan melakukan pencarian sebelum login tuntas 100%.")
+                sys.exit(1)
 
-        # 2. Execute Search with Latest filter (f=live)
+            print(f"🎉 SUCCESS! auth_token terverifikasi: {auth_token['value'][:8]}...")
+            with open(SESSION_FILE, "w") as f:
+                json.dump(cookies, f, indent=2)
+            page.screenshot(path="login_success.png")
+            send_telegram_photo("login_success.png", "🎉 Berhasil Login X.com! Sesi tersimpan aman.")
+
+        # 2. HANYA JALAN JIKA LOGIN SUDAH 100% SUKSES:
+        send_telegram(f"🔍 Sesi Login Aktif! Menjalankan pencarian Live untuk query: '{query}'...")
         search_url = f"https://x.com/search?q={query}&f=live"
         print(f"Navigating to search URL: {search_url}")
         page.goto(search_url, timeout=45000, wait_until="domcontentloaded")
@@ -186,7 +257,7 @@ def login_and_search(query="Barca"):
             send_telegram(report)
             send_telegram_photo("search_live.png", f"📸 Bukti Live Search X: {query}")
         else:
-            send_telegram(f"⚠️ Tidak ada tweet yang ditarik, lihat tangkapan layar live search.")
+            send_telegram(f"⚠️ Tidak ada tweet yang ditarik untuk '{query}', lihat screenshot.")
             send_telegram_photo("search_live.png", f"Live Search Result: {query}")
 
 if __name__ == "__main__":
