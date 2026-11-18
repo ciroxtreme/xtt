@@ -55,18 +55,18 @@ jobs:
           # 3. Jalankan daemon warp-svc dengan direktori runtime Cloudflare resmi
           echo "Starting warp-svc daemon with proper runtime dirs..."
           sudo mkdir -p /var/lib/cloudflare-warp /run/cloudflare-warp
-          sudo chmod 700 /var/lib/cloudflare-warp /run/cloudflare-warp
+          sudo chmod 777 /var/lib/cloudflare-warp /run/cloudflare-warp
           sudo nohup /usr/local/bin/warp-svc > /tmp/warp_svc.log 2>&1 &
           sleep 4
 
-          # 4. Inisialisasi WARP Proxy di Port 40000
+          # 4. Inisialisasi WARP Proxy di Port 40000 dengan sudo agar socket IPC berizin
           echo "Configuring warp-cli..."
-          warp-cli --accept-tos registration new || true
-          warp-cli --accept-tos mode proxy || true
-          warp-cli --accept-tos proxy port 40000 || true
-          warp-cli --accept-tos connect || true
+          sudo warp-cli --accept-tos registration new || true
+          sudo warp-cli --accept-tos mode proxy || true
+          sudo warp-cli --accept-tos proxy port 40000 || true
+          sudo warp-cli --accept-tos connect || true
           sleep 3
-          warp-cli --accept-tos status || true
+          sudo warp-cli --accept-tos status || true
 
           # 5. Pip dependencies & Browser Camoufox
           pip install "camoufox[geoip]" requests
