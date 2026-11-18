@@ -29,30 +29,53 @@ jobs:
           path: ~/.cache/camoufox
           key: ${{ runner.os }}-camoufox-browser-v1
 
-      - name: Setup Fast WARP & Dependencies
+      - name: Cache WARP Extracted Binaries
+        id: warp-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/warp-svc
+          key: ${{ runner.os }}-warp-bin-v1
+
+      - name: Setup Ultralight WARP & Dependencies
         run: |
-          # 1. Pasang xvfb & tools dasar (hanya beberapa detik)
+          # 1. Pasang hanya xvfb & libpcap/dbus minimal (sub-detik, nol gstreamer/webkit)
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends xvfb curl gpg lsb-release
+          sudo apt-get install -y --no-install-recommends xvfb dbus libpcap0.8 curl gpg lsb-release
 
-          # 2. Pasang Cloudflare WARP secara resmi dengan --no-install-recommends (mencegah package GUI & GStreamer)
-          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends cloudflare-warp || true
-
-          # 3. Inisialisasi Cloudflare WARP Proxy di Port 40000
-          if command -v warp-cli >/dev/null 2>&1; then
-            echo "Initializing WARP proxy..."
-            warp-cli --accept-tos registration new || true
-            warp-cli --accept-tos mode proxy || true
-            warp-cli --accept-tos proxy port 40000 || true
-            warp-cli --accept-tos connect || true
-            sleep 3
-            warp-cli --accept-tos status || true
+          # 2. Ekstrak langsung binary warp-svc & warp-cli dari deb tanpa APT dependency hell
+          if [ ! -f /usr/local/bin/warp-svc ]; then
+            echo "Extracting portable warp binaries directly from .deb package..."
+            curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+            echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+            sudo apt-get update -y
+            mkdir -p /tmp/warp_extract
+            cd /tmp/warp_extract
+            apt-get download cloudflare-warp
+            dpkg-deb -x cloudflare-warp*.deb ./
+            sudo cp bin/warp-svc /usr/local/bin/
+            sudo cp bin/warp-cli /usr/local/bin/
+            sudo cp -r lib/systemd/system/warp-svc.service /etc/systemd/system/ 2>/dev/null || true
+            sudo chmod +x /usr/local/bin/warp-svc /usr/local/bin/warp-cli
+            cd -
+            rm -rf /tmp/warp_extract
           fi
 
-          # 4. Pip dependencies & Browser Camoufox
+          # 3. Jalankan daemon warp-svc di background secara headless
+          echo "Starting warp-svc daemon..."
+          sudo pkill warp-svc || true
+          sudo nohup /usr/local/bin/warp-svc > /tmp/warp_svc.log 2>&1 &
+          sleep 3
+
+          # 4. Inisialisasi WARP Proxy di Port 40000
+          echo "Configuring warp-cli..."
+          /usr/local/bin/warp-cli --accept-tos registration new || true
+          /usr/local/bin/warp-cli --accept-tos mode proxy || true
+          /usr/local/bin/warp-cli --accept-tos proxy port 40000 || true
+          /usr/local/bin/warp-cli --accept-tos connect || true
+          sleep 2
+          /usr/local/bin/warp-cli --accept-tos status || true
+
+          # 5. Pip dependencies & Browser Camoufox
           pip install "camoufox[geoip]" requests
           if [ ! -d ~/.cache/camoufox ] || [ -z "$(ls -A ~/.cache/camoufox 2>/dev/null)" ]; then
             camoufox fetch || true
