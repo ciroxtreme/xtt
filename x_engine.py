@@ -10,23 +10,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "DUMMY_TELEGRAM_TOKEN_PROTE
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "1936436999")
 X_USERNAME = os.getenv("X_USERNAME", "Pulup302")
 X_PASSWORD = os.getenv("X_PASSWORD", "ciroxtreme0703")
-WEBSHARE_PROXY = os.getenv("WEBSHARE_ROTATING_PROXY", "")
 SESSION_FILE = "session_x.json"
-
-def get_proxy_config(use_webshare=False):
-    if use_webshare and WEBSHARE_PROXY:
-        try:
-            p = urllib.parse.urlparse(WEBSHARE_PROXY)
-            if p.hostname and p.port:
-                cfg = {"server": f"http://{p.hostname}:{p.port}"}
-                if p.username:
-                    cfg["username"] = urllib.parse.unquote(p.username)
-                if p.password:
-                    cfg["password"] = urllib.parse.unquote(p.password)
-                return cfg
-        except Exception as e:
-            print(f"Proxy parse error: {e}")
-    return None
 
 def send_telegram(text):
     print(f"[TELEGRAM] {text[:120]}...")
@@ -46,7 +30,7 @@ def send_telegram_photo(photo_path, caption=""):
         print(f"[ERR] Failed to send photo: {e}")
 
 def wait_for_telegram_reply(prompt_message, timeout_sec=180):
-    send_telegram(f"⏳ {prompt_message}\n\n👉 Kirim balasannya (kode angka/email) ke chat bot ini dalam {timeout_sec} detik.")
+    send_telegram(f"⏳ {prompt_message}\n\n👉 Kirim balasannya ke chat bot ini dalam {timeout_sec} detik.")
     url_updates = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     last_update_id = 0
     try:
@@ -76,142 +60,68 @@ def wait_for_telegram_reply(prompt_message, timeout_sec=180):
     send_telegram("❌ Waktu habis (timeout) menunggu kode verifikasi dari Telegram.")
     return None
 
-def handle_cloudflare_turnstile_if_present(page):
-    """
-    Mendeteksi jika X.com menampilkan 'Performing security verification' (Cloudflare Turnstile)
-    dan mengklik checkbox verifikasi secara manusiawi lalu menunggu sampai halaman terbuka.
-    """
-    for attempt in range(1, 6):
-        body_text = page.evaluate("() => document.body ? document.body.innerText : ''").lower()
-        if "performing security verification" not in body_text and "verify you are human" not in body_text:
-            return True
-
-        print(f"⚠️ [CLOUDFLARE TURNSTILE] Terdeteksi tantangan keamanan X.com (Attempt {attempt}/5), menyelesaikan...")
-        time.sleep(3)
-
-        # Cari iframe turnstile atau posisi widget lalu klik
-        clicked = False
-        for frame in page.frames:
-            if "challenges.cloudflare.com" in frame.url:
-                try:
-                    box = frame.locator("body").bounding_box()
-                    if box:
-                        # Checkbox Turnstile berada di sisi kiri widget (~x + 30, y + height/2)
-                        click_x = box["x"] + 30
-                        click_y = box["y"] + (box["height"] / 2)
-                        print(f"Clicking Turnstile iframe checkbox at ({click_x}, {click_y})...")
-                        page.mouse.move(click_x, click_y, steps=5)
-                        time.sleep(0.2)
-                        page.mouse.click(click_x, click_y)
-                        clicked = True
-                        break
-                except Exception as e:
-                    print(f"Frame click notice: {e}")
-
-        if not clicked:
-            # Fallback koordinat berdasarkan screenshot standar (1280x900)
-            # Di screenshot tampak kotak 'Verify you are human' berada di sekitar (260, 325)
-            try:
-                page.mouse.move(260, 325, steps=5)
-                page.mouse.click(260, 325)
-            except Exception:
-                pass
-
-        time.sleep(6)
-
-    body_after = page.evaluate("() => document.body ? document.body.innerText : ''").lower()
-    return "performing security verification" not in body_after
-
 def inspect_x_state(page):
     """
-    Memeriksa kondisi nyata halaman X.com (Anti-Halu):
-    Apakah sedang di halaman Cloudflare, sedang loading hydration, sudah login (@Pulup302), atau benar-benar terlempar ke /login.
+    Memeriksa kondisi DOM nyata X.com setelah hydration React SPA selesai.
     """
     return page.evaluate("""() => {
         const url = location.href;
-        const body = document.body ? document.body.innerText : '';
-        const bodyLower = body.toLowerCase();
-        const isCloudflare = bodyLower.includes('performing security verification') || bodyLower.includes('verify you are human');
-        const hasProfileNav = !!document.querySelector("a[data-testid='AppTabBar_Profile_Link'], [data-testid='SideNav_AccountSwitcher_Button'], a[aria-label='Profile']");
+        const hasProfileNav = !!document.querySelector(
+            "a[data-testid='AppTabBar_Profile_Link'], [data-testid='SideNav_AccountSwitcher_Button'], a[aria-label='Profile']"
+        );
         const tweetCount = document.querySelectorAll("article[data-testid='tweet']").length;
         const isLoginFlow = url.includes('/i/flow/login') || url.includes('/login');
         return {
             url,
-            isCloudflare,
             hasProfileNav,
             tweetCount,
             isLoginFlow
         };
     }""")
 
-def run_x_search_attempt(query, use_proxy=False):
-    proxy_cfg = get_proxy_config(use_webshare=use_proxy)
-    mode_label = f"Residential Proxy ({proxy_cfg['server']})" if proxy_cfg else "Direct IP"
-    print(f"Starting Camoufox with {mode_label}...")
+def login_and_search(query="Barca"):
+    send_telegram(f"🐦 [X Runner] Memulai eksekusi X Engine untuk query: '{query}'...")
 
-    with Camoufox(headless=True, proxy=proxy_cfg, geoip=True if proxy_cfg else False, i_know_what_im_doing=True) as browser:
+    with Camoufox(headless=True, i_know_what_im_doing=True) as browser:
         context = browser.new_context(viewport={"width": 1280, "height": 900})
 
-        has_auth_cookie = False
+        has_session = False
         if os.path.exists(SESSION_FILE):
             try:
                 with open(SESSION_FILE, "r") as f:
                     cookies = json.load(f)
-                    # Bersihkan cf_clearance / __cf_bm lama yang terikat IP sebelumnya agar tidak memicu konflik Cloudflare!
-                    clean_cookies = [
-                        c for c in cookies
-                        if c.get("name") not in ("cf_clearance", "__cf_bm")
-                    ]
-                    if clean_cookies:
-                        context.add_cookies(clean_cookies)
-                        has_auth_cookie = any(c.get("name") == "auth_token" for c in clean_cookies)
-                        print(f"Loaded {len(clean_cookies)} clean session cookies (has_auth_token={has_auth_cookie})")
+                    if cookies:
+                        context.add_cookies(cookies)
+                        print(f"Loaded {len(cookies)} cookies from {SESSION_FILE}")
+                        has_session = any(c.get("name") == "auth_token" for c in cookies)
             except Exception as e:
                 print(f"Failed to load cookies: {e}")
 
         page = context.new_page()
 
-        encoded_query = urllib.parse.quote(query)
-        search_url = f"https://x.com/search?q={encoded_query}&f=live"
+        need_login = True
+        if has_session:
+            print("Checking session status on https://x.com/home (waiting up to 25s for SPA hydration)...")
+            try:
+                page.goto("https://x.com/home", timeout=45000, wait_until="domcontentloaded")
+                for wait_sec in range(1, 26):
+                    time.sleep(1)
+                    st = inspect_x_state(page)
+                    if st["hasProfileNav"] or st["tweetCount"] > 0:
+                        need_login = False
+                        print(f"✅ Verified: Already logged in (@Pulup302) after {wait_sec}s! state={st}")
+                        break
+                    if st["isLoginFlow"] and wait_sec >= 10:
+                        print(f"Redirected to login flow after {wait_sec}s.")
+                        break
+            except Exception as e:
+                print(f"Session check notice: {e}")
 
-        # Jika sudah punya auth_token di session_x.json, LANGSUNG buka halaman Search
-        # dan tunggu sampai React SPA selesai memproses cookie (jangan buru-buru vonis cookie mati!)
-        if has_auth_cookie:
-            print(f"Navigating directly to search URL with existing auth_token ({mode_label}): {search_url}")
-            page.goto(search_url, timeout=50000, wait_until="domcontentloaded")
-
-            # Cek apakah dihadang Cloudflare Turnstile
-            if not handle_cloudflare_turnstile_if_present(page):
-                print(f"⚠️ Cloudflare Turnstile belum tembus di {mode_label}.")
-                return "CLOUDFLARE_BLOCKED"
-
-            # Tunggu hingga 25 detik sampai elemen profil ATAU tweet muncul (hydration React X.com)
-            print("Menunggu X.com selesai memproses cookie & merender DOM (maks 25 detik)...")
-            for wait_i in range(25):
-                state = inspect_x_state(page)
-                if state["isCloudflare"]:
-                    handle_cloudflare_turnstile_if_present(page)
-                if state["tweetCount"] > 0 or state["hasProfileNav"]:
-                    print(f"✅ [ANTI-HALU VERIFIED] Cookie aktif! hasProfileNav={state['hasProfileNav']}, tweetCount={state['tweetCount']} (setelah {wait_i+1}s)")
-                    break
-                if state["isLoginFlow"] and wait_i >= 8:
-                    print("⚠️ X.com me-redirect ke /i/flow/login, artinya auth_token benar-benar expired.")
-                    break
-                time.sleep(1)
-
-            state = inspect_x_state(page)
-            print(f"🧭 [X STATE INSPECTOR] {state}")
-
-            if state["isCloudflare"]:
-                return "CLOUDFLARE_BLOCKED"
-
-        # Hanya jalankan login manual jika benar-benar TIDAK punya auth_token atau terlempar ke /i/flow/login
-        state = inspect_x_state(page)
-        if not has_auth_cookie or (state["isLoginFlow"] and not state["hasProfileNav"]):
-            send_telegram(f"⚠️ Cookie auth_token belum ada / terdeteksi redirect ke /login. Membuka login resmi X.com untuk {X_USERNAME}...")
+        if need_login:
+            print("Starting login flow at https://x.com/i/flow/login...")
+            send_telegram("🔑 Membuka halaman login resmi X.com untuk akun Pulup302...")
             page.goto("https://x.com/i/flow/login", timeout=45000, wait_until="domcontentloaded")
             time.sleep(6)
-            handle_cloudflare_turnstile_if_present(page)
 
             try:
                 page.wait_for_selector("input[autocomplete='username'], input", timeout=15000)
@@ -220,6 +130,7 @@ def run_x_search_attempt(query, use_proxy=False):
 
             user_input = page.locator("input[autocomplete='username'], input").first
             if user_input.count() > 0:
+                print(f"Filling username {X_USERNAME}...")
                 user_input.click()
                 user_input.fill("")
                 user_input.fill(X_USERNAME)
@@ -227,9 +138,10 @@ def run_x_search_attempt(query, use_proxy=False):
                 page.keyboard.press("Enter")
                 time.sleep(5)
             else:
+                send_telegram("❌ Gagal menemukan kolom input username!")
                 page.screenshot(path="no_user_input.png")
-                send_telegram_photo("no_user_input.png", "❌ Gagal menemukan kolom input username X.com")
-                return "LOGIN_FAILED"
+                send_telegram_photo("no_user_input.png", "Kolom input username tidak ada")
+                sys.exit(1)
 
             try:
                 page.wait_for_selector("input[name='password'], input[type='password']", timeout=12000)
@@ -238,6 +150,7 @@ def run_x_search_attempt(query, use_proxy=False):
 
             pwd_input = page.locator("input[name='password'], input[type='password']").first
             if pwd_input.count() > 0:
+                print("Filling password...")
                 pwd_input.click(force=True)
                 pwd_input.fill("")
                 pwd_input.fill(X_PASSWORD)
@@ -245,17 +158,32 @@ def run_x_search_attempt(query, use_proxy=False):
                 page.keyboard.press("Enter")
                 time.sleep(8)
             else:
+                send_telegram("❌ Kolom input password belum muncul!")
                 page.screenshot(path="pwd_missing.png")
-                send_telegram_photo("pwd_missing.png", "❌ Kolom input password tidak muncul (mungkin butuh verifikasi tambahan)")
-                return "LOGIN_FAILED"
+                send_telegram_photo("pwd_missing.png", "Password field missing")
+                sys.exit(1)
 
-            # Navigasi ke search setelah login berhasil
-            page.goto(search_url, timeout=50000, wait_until="domcontentloaded")
-            time.sleep(6)
+            cookies = context.cookies()
+            auth_token = next((c for c in cookies if c.get("name") == "auth_token"), None)
+            if not auth_token:
+                page.screenshot(path="login_failed.png")
+                send_telegram_photo("login_failed.png", "❌ Login belum berhasil, auth_token belum ditemukan.")
+                sys.exit(1)
 
-        # Pastikan tweet sudah mulai ter-render
+            with open(SESSION_FILE, "w") as f:
+                json.dump(cookies, f, indent=2)
+            page.screenshot(path="login_success.png")
+            send_telegram_photo("login_success.png", "🎉 Berhasil Login X.com! Sesi tersimpan permanen.")
+
+        # 2. JALANKAN PENCARIAN LIVE DENGAN QUERY TER-ENCODE
+        encoded_query = urllib.parse.quote(query)
+        search_url = f"https://x.com/search?q={encoded_query}&f=live"
+        send_telegram(f"🔍 Sesi Login Aktif! Menjalankan pencarian Live untuk query: '{query}'...")
+        print(f"Navigating to search URL: {search_url}")
+        page.goto(search_url, timeout=45000, wait_until="domcontentloaded")
+
         try:
-            page.wait_for_selector("article[data-testid='tweet']", timeout=18000)
+            page.wait_for_selector("article[data-testid='tweet']", timeout=20000)
         except Exception:
             pass
 
@@ -289,16 +217,16 @@ def run_x_search_attempt(query, use_proxy=False):
         print(f"Total unique tweets collected: {len(tweet_records)}")
         page.screenshot(path="search_live.png")
 
-        # Simpan kembali cookies bersih (tanpa cf_clearance/__cf_bm agar tidak merusak run berikutnya di IP berbeda!)
+        # Update session cookies jika valid
         cookies_now = context.cookies()
         if any(c.get("name") == "auth_token" for c in cookies_now):
-            clean_save = [c for c in cookies_now if c.get("name") not in ("cf_clearance", "__cf_bm")]
             with open(SESSION_FILE, "w") as f:
-                json.dump(clean_save, f, indent=2)
+                json.dump(cookies_now, f, indent=2)
 
-        if tweet_records:
-            results = [f"👤 {u}\n💬 {t}" for u, t in tweet_records[:30]]
-            header = f"🔥 Postingan Terbaru di X untuk '{query}' (Live - {len(results)} Tweet | {mode_label}):\n\n"
+        results = [f"👤 {u}\n💬 {t}" for u, t in tweet_records[:30]]
+
+        if results:
+            header = f"🔥 Postingan Terbaru di X untuk '{query}' (Live - {len(results)} Tweet):\n\n"
             current_chunk = header
             chunk_num = 1
 
@@ -315,23 +243,10 @@ def run_x_search_attempt(query, use_proxy=False):
             if current_chunk.strip():
                 send_telegram(current_chunk.strip())
 
-            send_telegram_photo("search_live.png", f"📸 Bukti Live Search X: {query} (@Pulup302 Verified)")
-            return "SUCCESS"
+            send_telegram_photo("search_live.png", f"📸 Bukti Live Search X: {query}")
         else:
-            final_st = inspect_x_state(page)
-            if final_st["isCloudflare"]:
-                return "CLOUDFLARE_BLOCKED"
-            send_telegram(f"⚠️ Tidak ada tweet yang ditemukan untuk '{query}' (Posisi: {final_st}).")
+            send_telegram(f"⚠️ Tidak ada tweet yang ditarik untuk '{query}', lihat screenshot.")
             send_telegram_photo("search_live.png", f"Live Search Result: {query}")
-            return "NO_TWEETS"
-
-def login_and_search(query="Barca"):
-    send_telegram(f"🐦 [X Runner] Menjalankan Live Search X.com untuk: '{query}'...")
-    # Coba Direct IP dulu dengan cookies bersih (tanpa cf_clearance lama yang bikin bentrok IP!)
-    res = run_x_search_attempt(query, use_proxy=False)
-    if res == "CLOUDFLARE_BLOCKED" and WEBSHARE_PROXY:
-        send_telegram("🔄 Terdeteksi Cloudflare Turnstile di Direct IP, mengalihkan otomatis ke Residential Proxy...")
-        run_x_search_attempt(query, use_proxy=True)
 
 if __name__ == "__main__":
     q = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].strip() else "Barca"
