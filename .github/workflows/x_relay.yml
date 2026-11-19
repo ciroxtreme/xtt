@@ -1,4 +1,4 @@
-name: X (Twitter) Live Search Relay
+name: X (Twitter) Live Search Relay (Playwright Stealth & WARP)
 
 on:
   workflow_dispatch:
@@ -20,21 +20,28 @@ jobs:
 
       - name: Install & Setup Official Cloudflare WARP SOCKS5 Tunnel
         run: |
-          echo "📥 Memasang Cloudflare WARP client resmi (ubuntu-22.04 jammy)..."
-          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ jammy main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends xvfb curl gpg cloudflare-warp
+          echo "📥 Memasang Cloudflare WARP client resmi..."
+          export DEBIAN_FRONTEND=noninteractive
+          curl -fsSL -o /tmp/warp.deb https://pkg.cloudflareclient.com/pool/jammy/main/c/cloudflare-warp/cloudflare-warp_2024.11.309.0_amd64.deb || curl -fsSL -o /tmp/warp.deb https://pkg.cloudflareclient.com/pool/jammy/main/c/cloudflare-warp/cloudflare-warp_2024.6.497.0_amd64.deb || true
+
+          if [ -f /tmp/warp.deb ] && [ $(stat -c%s /tmp/warp.deb) -gt 1000000 ]; then
+            sudo dpkg -i /tmp/warp.deb || true
+          else
+            curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+            echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ jammy main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+            sudo apt-get update -y -o Dir::Etc::sourcelist="sources.list.d/cloudflare-client.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+            sudo apt-get install -y --no-install-recommends cloudflare-warp
+          fi
 
           sudo systemctl start warp-svc
-          sleep 2
+          sleep 1
 
           warp-cli --accept-tos registration new || warp-cli --accept-tos register || true
           warp-cli --accept-tos mode proxy || true
           warp-cli --accept-tos proxy port 40000 || true
           warp-cli --accept-tos connect || true
 
-          sleep 3
+          sleep 2
           echo "✅ Status WARP:"
           warp-cli --accept-tos status || true
 
@@ -43,21 +50,21 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Cache Camoufox Browser
-        id: camoufox-cache
+      - name: Cache Playwright Browser
+        id: playwright-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/camoufox
-          key: ${{ runner.os }}-camoufox-browser-v1
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-v1
 
-      - name: Fast Setup Python Dependencies
+      - name: Fast Setup Playwright & Dependencies
         run: |
-          pip install "camoufox[geoip]" requests
-          if [ ! -d ~/.cache/camoufox ] || [ -z "$(ls -A ~/.cache/camoufox 2>/dev/null)" ]; then
-            camoufox fetch || true
+          pip install --no-cache-dir playwright playwright-stealth requests
+          if [ ! -d ~/.cache/ms-playwright ] || [ -z "$(ls -A ~/.cache/ms-playwright 2>/dev/null)" ]; then
+            playwright install chromium
           fi
 
-      - name: Run X Search Engine with Camoufox
+      - name: Run X Search Engine with Playwright
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
