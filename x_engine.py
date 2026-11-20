@@ -10,8 +10,8 @@ from playwright_stealth import Stealth
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "1936436999")
-X_USERNAME = os.getenv("X_USERNAME", "Pulup302")
-X_PASSWORD = os.getenv("X_PASSWORD", "ciroxtreme0703")
+X_USERNAME = os.getenv("X_USERNAME", "")
+X_PASSWORD = os.getenv("X_PASSWORD", "")
 SESSION_FILE = "session_x.json"
 
 def get_browser_proxy():
@@ -206,7 +206,7 @@ def login_and_search(query="Barca"):
                 sys.exit(1)
 
             # Wajib pastikan kolom input[type='password'] benar-benar muncul sebelum mengetik password!
-            # (Mencegah bug mengetik Pulup302ciroxtreme0703 di kolom username yang sama!)
+            # (Mencegah bug mengetik password di kolom username yang sama!)
             pwd_input = page.locator("input[name='password'], input[type='password']").first
             try:
                 pwd_input.wait_for(state="visible", timeout=12000)
