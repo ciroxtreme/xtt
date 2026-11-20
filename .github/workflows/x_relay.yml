@@ -64,26 +64,36 @@ jobs:
             playwright install chromium
           fi
 
+      - name: Restore X session from secret
+        env:
+          X_SESSION_JSON: ${{ secrets.X_SESSION_JSON }}
+        run: |
+          if [ -n "$X_SESSION_JSON" ]; then
+            printf '%s' "$X_SESSION_JSON" > session_x.json
+            echo "Session restored from X_SESSION_JSON secret."
+          else
+            echo "No X_SESSION_JSON secret yet — engine will log in with username/password."
+          fi
+
       - name: Run X Search Engine with Playwright
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          X_USERNAME: ${{ secrets.X_USERNAME }}
+          X_PASSWORD: ${{ secrets.X_PASSWORD }}
           PYTHONUNBUFFERED: "1"
         run: |
           xvfb-run -a python -u x_engine.py "${{ github.event.inputs.query }}"
 
-      - name: Commit Updated Session If Changed
+      - name: Save X session to secret
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          git config user.name "Ciro Session Bot"
-          git config user.email "ciro@automated.local"
           if [ -f session_x.json ]; then
-            git add session_x.json
-            if ! git diff --cached --quiet; then
-              git commit -m "Auto-persist session_x.json [skip ci]"
-              git push origin main
-            else
-              echo "No session changes to commit."
-            fi
+            gh secret set X_SESSION_JSON < session_x.json
+            echo "Session saved to X_SESSION_JSON secret."
+            rm -f session_x.json
+          else
+            echo "No session file — nothing to save."
           fi
